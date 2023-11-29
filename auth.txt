@@ -1,0 +1,78 @@
+[8:48 am, 29/11/2023] My Office Contact: api.interceptors.request.use(
+  (config) => {
+    const token = Cookies.get("myMenuAdminToken");
+    if (token) {
+      config.headers["Authorization"] = token;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response.status === 401) {
+      localStorage.removeItem("myMenuAdminUser");
+      Cookies.remove("myMenuAdminToken");
+      window.location.replace("/login");
+    }
+    return Promise.reject(error);
+  }
+);
+[8:50 am, 29/11/2023] My Office Contact: const jwt = require("jsonwebtoken");
+
+const verifyToken = (req, res, next) => {
+  if (req?.headers && req?.headers?.authorization) {
+    jwt.verify(
+      req.headers.authorization,
+      process.env.SECRET_KEY,
+      function (err, decode) {
+        console.log("decode ", decode);
+        if (err) {
+          res.status(401).send({
+            status: false,
+            message: "Unauthorize",
+          });
+        } else {
+          req.user = decode;
+          next();
+        }
+      }
+    );
+  } else {
+    req.user = undefined;
+    next();
+  }
+};
+module.exports = verifyToken;
+[8:53 am, 29/11/2023] My Office Contact: import { useState } from "react";
+import Cookies from "js-cookie";
+
+export const useCookies = (keyName, defaultValue) => {
+  const [storedValue, setStoredValue] = useState(() => {
+    try {
+      const value = Cookies.get(keyName);
+
+      if (value) {
+        return JSON.parse(value);
+      } else {
+        Cookies.set(keyName, defaultValue);
+        return defaultValue;
+      }
+    } catch (err) {
+      return defaultValue;
+    }
+  });
+
+  const setValue = (newValue) => {
+    try {
+      Cookies.set(keyName, newValue);
+    } catch (err) {}
+    setStoredValue(newValue);
+  };
+
+  return [storedValue, setValue];
+};
