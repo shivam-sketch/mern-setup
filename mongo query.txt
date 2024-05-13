@@ -1,0 +1,93 @@
+router.post("/test", async (req, res) => {
+  try {
+    const { page = 1, limit = 10 } = req.body;
+
+    const criteria = {
+      isActive: true,
+      isDeleted: false,
+    };
+
+    const aggregationPipeline = [
+      {
+        $lookup: {
+          from: "candidate_details", // The collection to join with
+          localField: "comments.userId", // The field from the current collection
+          foreignField: "_id", // The field from the other collection
+          as: "commentsWithUser", // The name for the new array field
+        },
+      },
+      {
+        $project: {
+          _id: 1, // Include the post _id
+          firstName: 1, // Include other fields from the posts collection
+          comments: {
+            $map: {
+              input: "$comments", // Map over the comments array
+              as: "comment",
+              in: {
+                $mergeObjects: [
+                  "$$comment", // Include existing comment fields
+                  {
+                    userDetails: {
+                      $arrayElemAt: [
+                        // Get the first (and only) matching user
+                        {
+                          $filter: {
+                            input: "$commentsWithUser",
+                            as: "candidate_details",
+                            cond: {
+                              $eq: [
+                                "$$candidate_details._id",
+                                "$$comment.userId",
+                              ],
+                            },
+                          },
+                        },
+                        0,
+                      ],
+                    },
+                    postId: "$_id",
+                  },
+                ],
+              },
+            },
+          },
+        },
+      },
+      {
+        $facet: {
+          paginatedResults: [
+            { $skip: (page - 1) * limit },
+            { $limit: parseInt(limit) },
+          ],
+          totalCount: [{ $count: "value" }],
+        },
+      },
+    ];
+    console.log("agg data");
+
+    const [result] = await PostsModel.aggregate(aggregationPipeline);
+
+    const paginatedResults = result.paginatedResults || [];
+    const totalCount =
+      (result.totalCount &&
+        result.totalCount[0] &&
+        result.totalCount[0].value) ||
+      0;
+    const totalPages = Math.ceil(totalCount / parseInt(limit));
+
+    const data = {
+      result: paginatedResults,
+      paginate: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        totalPages,
+        totalResults: totalCount,
+      },
+    };
+
+    return res.status(200).json({ data });
+  } catch (error) {
+    res.status(500).json({ status: 500, data: error, message: "server error" });
+  }
+});
